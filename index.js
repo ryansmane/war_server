@@ -26,30 +26,47 @@ io.on('connection', (socket) => {
     })
 
     socket.on('join-room', data => {
-        console.log(data)
-
         socket.join(data.name);
 
         rooms.map(r => {
             if (r.name == data.name) {
-                console.log(r)
                 r.players.push(data.player)
-                console.log(r)
                 if (r.players.length == ROOM_CAPACITY) {
                    let a = new Deck();
                    a.genShuffledDeck()
                    for (let i = 0; i < r.players.length; i++) {
                         r.players[i].deck = a.deck.splice(0, CARD_COUNT/ROOM_CAPACITY);
                     }
-                    console.log(r)
+
                     io.to(data.name).emit('get-all-players', r);
-                    console.log(r)
+
                 }
             }
         })
 
         io.emit('return-rooms', rooms); 
         
+    })
+
+    socket.on('clicked', data => {
+        rooms.map(r => {
+            if (r.name === data.name) {
+                r.players.map(p => {
+                    if (p.id === data.id) {
+                        p.clicked = true;
+                    }
+                })
+            }
+            if (allClicked(r.players)) {
+                r.players.forEach(player => {
+                    player.clicked = false;
+                })
+                let res = manipulateDecks(r.players);
+                r.players = res.players
+                io.to(data.name).emit('return-after-click', r.players);
+                
+            }
+        })
     })
 
     socket.on('disconnect', () => {
@@ -64,3 +81,30 @@ io.on('connection', (socket) => {
 http.listen(port, () => {
     console.log(`listening on ${port}`);
 });
+
+function allClicked(players, room_cap = null) {
+    let filtered = players.filter(p => p.clicked === true);
+    return filtered.length === ROOM_CAPACITY; 
+}
+
+function manipulateDecks(players) {
+    let topCards = [];
+    let winnings = [];
+    players.forEach(p => {
+        let t = p.deck.shift()
+        topCards.push({id: p.id, topCard: t});
+        winnings.push(t);
+    })
+    console.log('tops: ', topCards)
+    topCards.sort((a, b) => b.topCard.pip - a.topCard.pip);
+    console.log('tops sorted: ', topCards)
+    let winner = topCards[0].id;
+    console.log('winner: ' + winner, 'winnings: ' + winnings);
+    players.map(p => {
+        if (p.id == winner) {
+            p.deck = p.deck.concat(winnings)
+        }
+    })
+    console.log('players: ' + players)
+    return {players, winner};
+}
