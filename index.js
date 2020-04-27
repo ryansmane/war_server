@@ -63,8 +63,10 @@ io.on('connection', (socket) => {
                 })
                 let res = manipulateDecks(r.players);
                 r.players = res.players
-                io.to(data.name).emit('return-after-click', r.players);
+                io.to(data.name).emit('return-after-click', {players: r.players, all: true});
                 
+            } else {
+                io.to(data.name).emit('return-after-click', {players: r.players, all: false});
             }
         })
     })
@@ -95,16 +97,16 @@ function manipulateDecks(players) {
         topCards.push({id: p.id, topCard: t});
         winnings.push(t);
     })
-    console.log('tops: ', topCards)
+
     topCards.sort((a, b) => b.topCard.pip - a.topCard.pip);
-    console.log('tops sorted: ', topCards)
+
     let winner = topCards[0].id;
-    console.log('winner: ' + winner, 'winnings: ' + winnings);
+
     players.map(p => {
         if (p.id == winner) {
             p.deck = p.deck.concat(winnings)
         }
     })
-    console.log('players: ' + players)
+ 
     return {players, winner};
 }
