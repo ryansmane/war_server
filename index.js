@@ -23,6 +23,7 @@ io.on('connection', (socket) => {
            capacity: data.capacity,
            name: data.name, 
            host: data.host,
+           assigned: data.assigned,
            players: {
             [data.host]: data.player   
            }
@@ -44,12 +45,24 @@ io.on('connection', (socket) => {
        })
 
        socket.on('ready-up', host => {
+           let res;
            rooms[host].players[socket.id].ready = true;
            if (Object.values(rooms[host].players).filter(p => p.ready === true).length === rooms[host].capacity) {
-               assignDecks(rooms[host.players]);
-               io.to(rooms[host].name).emit('all-ready', rooms[host]);
+               if (!rooms[host].assigned) {
+               assignDecks(rooms[host].players);
+               rooms[host].assigned = true;
+               }
+               Object.values(rooms[host].players).forEach(player => {
+                   player.ready = false;
+               })
+               res = getRelevantCards(rooms[host].players);
+               io.to(rooms[host].name).emit('all-ready', res);
            }
+        //    else {
+        //        io.to(rooms[host].name).emit('one-ready', socket.id)
+        //    }
        })
+
     // socket.on('join-room', data => {
     //     socket.join(data.name);
 
@@ -126,86 +139,58 @@ http.listen(port, () => {
     console.log(`listening on ${port}`);
 });
 
-// function allClicked(players, room_cap = null) {
-//     let filtered = players.filter(p => p.clicked === true);
-//     return filtered.length === ROOM_CAPACITY; 
-// }
+
 function assignDecks(players) {
-
+    let values = Object.values(players);
+    for (let i = 0; i < values.length; i++) {
+        d = new Deck();
+        d.shuffle();
+        values[i].deck = d.deck;
+    }
 }
-// function manipulateDecks(players) {
-//     let topCards = [];
-//     let winnings = [];
-//     let thereWasAWar = false;
+
+function getRelevantCards(players) {
+    let values = Object.values(players);
+    let info = [];
+    let winnings = [];
+    for (let i = 0; i < values.length; i++) {
+        let popped = values[i].deck.pop();
+        winnings.push(popped)
+        info.push({id: values[i].id, top: popped});
+    }
+    let data = weHaveAWar(info);
     
-//     players.forEach(p => {
-//         let t = p.deck.shift()
-//         topCards.push({id: p.id, topCard: t});
-//         winnings.push(t);
-//     })
+    if (data.flag) {
+        let warInfo = [info]
+        do {
+        let newInfo = [];
+        data.playersAtWar.forEach(player => {
+            winnings.push(players[player.id].deck.pop());
+            winnings.push(players[player.id].deck.pop());
+            winnings.push(players[player.id].deck.pop());
+        })
+        data.playersAtWar.forEach(player => {
+            let popped = players[player.id].deck.pop();
+            winnings.push(popped)
+            newInfo.push({id: player.id, top: popped});
+        })
+        data = weHaveAWar(newInfo); 
+        warInfo.push(newInfo);
+        } while (data.flag);
+        players[data.winner].deck = winnings.concat(players[data.winner].deck);
+        return {info: warInfo, winner: data.winner, warFlag: true};
+    } else {
+        players[data.winner].deck = winnings.concat(players[data.winner].deck);
+        return {info: info, winner: data.winner, warFlag: false};
+    }
+}
 
-//     topCards.sort((a, b) => b.topCard.pip - a.topCard.pip);
+function weHaveAWar(info) {
+    info.sort((a, b) => b.top.pip - a.top.pip);
+    let first = info[0].top.pip;
+    let filtered = info.filter(obj => obj.top.pip == first);
+    console.log(filtered)
+    return filtered.length > 1 ? {playersAtWar: filtered, flag: true} : {winner: filtered[0].id, flag: false}
+}
 
-//     //array of object {playerID, their top card}
-//     let warCheck = topCards.filter((c,i,a) => c.topCard.pip === a[0].topCard.pip);
-//     console.log(warCheck)
-//     if (warCheck.length > 1) {
-//         topCards = [];
-//         let winner;
-//         thereWasAWar = true;
-//         let eventualWinner;
-//         let wars = [];
-//         let bounties = [];
-//         wars.push([]);
-//         index = 0;
-//         while (warCheck.length > 1)
-//          {
-//              warCheck.forEach((obj) => {
-                 
-//                 players.map(p => {
-//                     if (p.id == obj.id) {
-                        
-//                         bounties.push(p.deck.shift());
-//                         bounties.push(p.deck.shift());
-//                         bounties.push(p.deck.shift());
-//                         let t = p.deck.shift();
-//                         topCards.push({id: p.id, topCard: t});
-//                         wars[index].push({id: p.id, threeShowing: bounties, newTop: t})
-                        
-//                     }
-//                 })
 
-//             })
-//             topCards.sort((a, b) => b.topCard.pip - a.topCard.pip);
-
-    
-//             warCheck = topCards.filter((c,i,a) => c.topCard.pip === a[0].topCard.pip);
-//             index++;
-//         } 
-//         eventualWinner = topCards[0].id;
-
-//         for (let i = 0; i < wars.length; i++) {
-//             winnings.push(wars[i].newTop);
-//             for (let k = 0; k < wars[i].threeShowing.length; k++) {
-//                 winnings.push(wars[i].threeShowing[k]);
-//         }
-        
-//     }
-//     players.map((p) => {
-//             if (p.id == winner) {
-//                 p.deck = p.deck.concat(winnings);
-//             }
-//         });
-    
-//     } else {
-//         winner = topCards[0].id;
-
-//         players.map((p) => {
-//             if (p.id == winner) {
-//                 p.deck = p.deck.concat(winnings);
-//             }
-//         });
-//     }
- 
-//     return thereWasAWar ? {players, thereWasAWar, eventualWinner, wars} : {players, thereWasAWar, winner};
-// }
