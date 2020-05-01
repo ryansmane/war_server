@@ -21,6 +21,10 @@ class Player {
    addWinnings(winnings) {
       this.deck = winnings.concat(this.deck);
    }
+
+   getDeckLength() {
+      return this.deck.length;
+   }
 }
 
 exports.Player = Player;
