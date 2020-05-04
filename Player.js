@@ -4,18 +4,20 @@ class Player {
       this.deck = [];
       this.ready = false;
       this.initialized = false;
+      this.enabled = true;
    }
 
-   removeTopThree() {
-      let topThree = [];
-      topThree.push(this.deck.pop());
-      topThree.push(this.deck.pop());
-      topThree.push(this.deck.pop());
-      return topThree;
+   removeTopCards() {
+      let max = Math.min(3, this.deck.length);
+      let tops = [];
+      for (let i = 0; i < max; i++) {
+         tops.push(this.deck.pop());
+      }
+      return tops;
    }
 
    getTopCard() {
-      return this.deck.pop();
+      return this.deck.length > 0 ? this.deck.pop() : null;
    }
 
    addWinnings(winnings) {
