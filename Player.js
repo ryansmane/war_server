@@ -8,7 +8,7 @@ class Player {
    }
 
    removeTopCards() {
-      let max = Math.min(3, this.deck.length);
+      let max = Math.min(3, Math.max(0, this.deck.length - 1));
       let tops = [];
       for (let i = 0; i < max; i++) {
          tops.push(this.deck.pop());
