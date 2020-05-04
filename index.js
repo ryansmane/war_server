@@ -81,7 +81,6 @@ io.on('connection', (socket) => {
       let playersCopy = c.playersCopy;
 
       if (comparator === 1) {
-         console.log('one winner')
          let winner = playersCopy[0].id;
          rooms[host].players[winner].addWinnings(winnings);
          updateDeckLengths(host);
@@ -125,7 +124,6 @@ io.on('connection', (socket) => {
          playersCopy.sort((a, b) => b.card.pip - a.card.pip);
          let comparator = playersCopy.filter((p, i, a) => p.card.pip === a[0].card.pip && warrers[p.id]).length;
          if (comparator === 1) {
-            console.log('resolved')
             let winner = playersCopy[0].id;
             rooms[host].players[winner].addWinnings(rooms[host].warBounty);
             rooms[host].warBounty = [];
@@ -136,13 +134,18 @@ io.on('connection', (socket) => {
                players: rooms[host].readyPlayers,
                roomCap: rooms[host].capacity,
                deckLengths: rooms[host].deckLengths,
-               warHistory: warHistory
+               warHistory: warHistory,
+               winner: winner
             });
          } else if (comparator > 1) {
-            let warPlayers = getNewPlayersObject(playersCopy, host, comparator);
+            let warrersCopy = Object.values(warrers).slice();
+            let warPlayers = getNewPlayersObject(warrersCopy, host, comparator);
             rooms[host].warBounty = winnings;
             rooms[host].warringPlayers = warPlayers;
-            io.to(rooms[host].name).emit('war', warPlayers);
+            players.forEach(p => {
+               p.changed = false;
+            })
+            io.to(rooms[host].name).emit('war', {players: rooms[host].readyPlayers, warPlayers: warPlayers});
 
          }
       } else {

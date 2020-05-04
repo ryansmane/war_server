@@ -1,6 +1,6 @@
 
 const SUITS = ['C', 'H', 'D', 'S'];
-const PIPS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 14, 14, 14, 14];
+const PIPS = [2, 3, 4, 5, 6, 7, 14, 14, 14, 14, 14, 14, 14];
 
 class Deck {
     constructor() {
