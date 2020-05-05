@@ -29,6 +29,7 @@ io.on('connection', (socket) => {
          initPlayers: {},
          deckLengths: {},
          readyPlayers: {},
+         deactivationMap: {}
       };
       socket.join(data.name);
       io.emit('return-rooms', rooms);
@@ -71,16 +72,18 @@ io.on('connection', (socket) => {
       updateDeckLengths(host);
       io.to(rooms[host].name).emit('one-ready', {
          players: rooms[host].readyPlayers,
-         roomCap: rooms[host].capacity,
+         roomCap: rooms[host].capacity - Object.values(rooms[host].deactivationMap).length,
          deckLengths: rooms[host].deckLengths
       });  
    });
 
    socket.on('refresh-cards', host => {
+      console.log(refresh)
      refresh(host, socket.id);
    });
 
    socket.on('need-resolution', data => {
+      console.log('clicked fight')
       let host = data.host
       let warrers = data.warringPlayers;
       rooms[host].warBounty = rooms[host].warBounty.concat(rooms[host].players[socket.id].removeTopCards());
@@ -92,18 +95,20 @@ io.on('connection', (socket) => {
          changed: true
          }
       } else {
-         console.log('do something')
+         delete warrers[socket.id]
       } 
 
       delete rooms[host].warringPlayers[socket.id];
 
       if (_.isEmpty(rooms[host].warringPlayers)) {
-         resolveWar(host, warrers);
+         console.log('is empty')
+         resolveWar(host, warrers, socket.id);
       } else {
+         console.log('skipped')
          updateDeckLengths(host);
          io.to(rooms[host].name).emit('one-ready', {
          players: rooms[host].readyPlayers,
-         roomCap: rooms[host].capacity,
+         roomCap: rooms[host].capacity - rooms[host].deactivationMap.length,
          deckLengths: rooms[host].deckLengths,
          war: true
          });
@@ -185,22 +190,17 @@ function compare(host) {
 }
 
 function checkForEmpty(host, id) {
-   let players = Object.values(rooms[host].players);
-   let filtered = players.filter(p => p.getDeckLength() === 0);
-   if (filtered.length === 0) {
-      return {flag: false};
-   } else if (filtered.length > 0) {
-      let deactivate = false;
-      for (let i = 0; i < filtered.length; i++) {
-         if (filtered[i].id === id) {
-            deactivate = true;
+   let players = Object.keys(rooms[host].initPlayers);
+   let flag = false;
+   for (let i = 0; i < players.length; i++) {
+      if (rooms[host].deckLengths[players[i]] === 0) {
+         if (!rooms[host].deactivationMap[players[i]]) {
+            flag = true;
+            rooms[host].deactivationMap[players[i]] = players[i];
          }
-         rooms[host].initPlayers[filtered[i].id].active = false;
       }
-      rooms[host].capacity -= filtered.length;
-      return {flag: true, deactivate: deactivate};
    }
-   
+   return flag;
 }
 
 function refresh(host, id) {
@@ -212,14 +212,16 @@ function refresh(host, id) {
       let winner = playersCopy[0].id;
       rooms[host].players[winner].addWinnings(winnings);
       updateDeckLengths(host);
-      let f = checkForEmpty(host, id);
+      let flag = checkForEmpty(host);
       rooms[host].readyPlayers = {};
+      let l = Object.values(rooms[host].deactivationMap).length;
       io.to(rooms[host].name).emit('resolved', {
          winner: winner,
          players: rooms[host].readyPlayers,
-         roomCap: rooms[host].capacity,
+         roomCap: rooms[host].capacity - l,
          deckLengths: rooms[host].deckLengths,
-         newPlayers: f.flag ? ( f.deactivate ? 'DEACTIVATE' : Object.values(rooms[host].initPlayers)) : false
+         deactivationMap: !flag ? false : rooms[host].deactivationMap,
+         ultimateWinner: Object.values(rooms[host].deactivationMap).length === rooms[host].capacity - 1 ? true : false
       });
    } else if (comparator > 1) {
       let warPlayers = getWarPlayers(playersCopy, host, comparator);
@@ -231,8 +233,10 @@ function refresh(host, id) {
    }
 }
 
-function resolveWar(host, warrers) {
-   console.log('warrers before comparison: ', warrers)
+function resolveWar(host, warrers, id) {
+   if (Object.keys(warrers).length === 1) {
+      console.log('winner by disqualification');
+   } else {
    let players = Object.values(rooms[host].readyPlayers);
    let winnings = [];
    let playersCopy = players.slice();
@@ -242,22 +246,26 @@ function resolveWar(host, warrers) {
       }
    });
    playersCopy.sort((a, b) => b.card.pip - a.card.pip);
-   console.log('ordered players copy: ', playersCopy)
    let comparator = playersCopy.filter((p, i, a) => p.card.pip === a[0].card.pip && warrers[p.id]).length;
    if (comparator === 1) {
       let winner = playersCopy[0].id;
       rooms[host].warBounty = rooms[host].warBounty.concat(winnings);
       rooms[host].players[winner].addWinnings(rooms[host].warBounty);
       rooms[host].warBounty = [];
+      Object.values(rooms[host].readyPlayers).forEach(p => p.changed = true);
       warHistory = Object.assign({}, rooms[host].readyPlayers);
       rooms[host].readyPlayers = {};
       updateDeckLengths(host);
+      let flag = checkForEmpty(host);
+      let l = Object.values(rooms[host].deactivationMap).length;
       io.to(rooms[host].name).emit('resolved', {
          players: rooms[host].readyPlayers,
-         roomCap: rooms[host].capacity,
+         roomCap: rooms[host].capacity - l,
          deckLengths: rooms[host].deckLengths,
          warHistory: warHistory,
-         winner: winner
+         winner: winner,
+         deactivationMap: !flag ? false : rooms[host].deactivationMap,
+         ultimateWinner: rooms[host].deactivationMap.length === rooms[host].capacity - 1 ? true : false
       })
    } else if (comparator > 1) {
       let warPlayers = getWarPlayers(playersCopy, host, comparator);
@@ -265,9 +273,9 @@ function resolveWar(host, warrers) {
       rooms[host].warringPlayers = warPlayers;
       players.forEach(p => {
          p.changed = false;
-      })
-      console.log('new war players: ', warPlayers);
+      });
       updateDeckLengths(host);
       io.to(rooms[host].name).emit('war', { players: rooms[host].readyPlayers, warPlayers: warPlayers, deckLengths: rooms[host].deckLengths });
+   }
    }
 }
