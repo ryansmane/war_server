@@ -63,8 +63,7 @@ io.on('connection', (socket) => {
    });
 
    socket.on('ready-up', (host) => {
-      
-      rooms[host].readyPlayers[socket.id] = {
+         rooms[host].readyPlayers[socket.id] = {
          id: socket.id,
          card: rooms[host].players[socket.id].getTopCard(),
          changed: true
@@ -78,33 +77,26 @@ io.on('connection', (socket) => {
    });
 
    socket.on('refresh-cards', host => {
-      console.log(refresh)
      refresh(host, socket.id);
    });
 
    socket.on('need-resolution', data => {
-      console.log('clicked fight')
       let host = data.host
       let warrers = data.warringPlayers;
       rooms[host].warBounty = rooms[host].warBounty.concat(rooms[host].players[socket.id].removeTopCards());
-      let t = rooms[host].players[socket.id].getTopCard();
-      if (t !== null) {
+      
       rooms[host].readyPlayers[socket.id] = {
          id: socket.id,
-         card: t,
+         card: rooms[host].players[socket.id].getTopCard(),
          changed: true
          }
-      } else {
-         delete warrers[socket.id]
-      } 
+
 
       delete rooms[host].warringPlayers[socket.id];
 
       if (_.isEmpty(rooms[host].warringPlayers)) {
-         console.log('is empty')
          resolveWar(host, warrers, socket.id);
       } else {
-         console.log('skipped')
          updateDeckLengths(host);
          io.to(rooms[host].name).emit('one-ready', {
          players: rooms[host].readyPlayers,
@@ -156,7 +148,9 @@ function assignDecks(players, d, cap) {
 function getWarPlayers(copy, host, comp) {
    let players = {};
    for (let i = 0; i < comp; i++) {
+      if (rooms[host].deckLengths[copy[i].id] > 0) {
       players[copy[i].id] = rooms[host].readyPlayers[copy[i].id];
+      }
    }
    return players;
 }
@@ -224,27 +218,48 @@ function refresh(host, id) {
          ultimateWinner: Object.values(rooms[host].deactivationMap).length === rooms[host].capacity - 1 ? true : false
       });
    } else if (comparator > 1) {
+      updateDeckLengths(host)
       let warPlayers = getWarPlayers(playersCopy, host, comparator);
       rooms[host].warBounty = winnings;
+      if (Object.values(warPlayers).length === 1) {
+         let winner = Object.values(warPlayers)[0].id;
+         rooms[host].warBounty = rooms[host].warBounty.concat(winnings);
+         rooms[host].players[winner].addWinnings(rooms[host].warBounty);
+         rooms[host].warBounty = [];
+         Object.values(rooms[host].readyPlayers).forEach(p => p.changed = true);
+         rooms[host].readyPlayers = {};
+         updateDeckLengths(host);
+         let flag = checkForEmpty(host);
+         let l = Object.values(rooms[host].deactivationMap).length;
+         io.to(rooms[host].name).emit('resolved', {
+            players: rooms[host].readyPlayers,
+            roomCap: rooms[host].capacity - l,
+            deckLengths: rooms[host].deckLengths,
+            winner: winner,
+            deactivationMap: !flag ? false : rooms[host].deactivationMap,
+            ultimateWinner: Object.values(rooms[host].deactivationMap).length === rooms[host].capacity - 1 ? true : false
+         })
+      }
+      else {
       rooms[host].warringPlayers = warPlayers;
-      updateDeckLengths(host)
+      let flag = checkForEmpty(host);
       Object.values(rooms[host].readyPlayers).forEach(p => p.changed = false);
-      io.to(rooms[host].name).emit('war', {players: rooms[host].readyPlayers, warPlayers: warPlayers, deckLengths: rooms[host].deckLengths});
+      io.to(rooms[host].name).emit('war', { players: rooms[host].readyPlayers, warPlayers: warPlayers, deckLengths: rooms[host].deckLengths, deactivationMap: !flag ? false : rooms[host].deactivationMap});
+      }
    }
 }
 
 function resolveWar(host, warrers, id) {
-   if (Object.keys(warrers).length === 1) {
-      console.log('winner by disqualification');
-   } else {
    let players = Object.values(rooms[host].readyPlayers);
    let winnings = [];
    let playersCopy = players.slice();
+   console.log('winnings before foreach: ' + winnings)
    players.forEach(p => {
       if (warrers[p.id]) {
          winnings.push(p.card);
       }
    });
+   console.log('winnings after foreach: ' + winnings)
    playersCopy.sort((a, b) => b.card.pip - a.card.pip);
    let comparator = playersCopy.filter((p, i, a) => p.card.pip === a[0].card.pip && warrers[p.id]).length;
    if (comparator === 1) {
@@ -265,17 +280,40 @@ function resolveWar(host, warrers, id) {
          warHistory: warHistory,
          winner: winner,
          deactivationMap: !flag ? false : rooms[host].deactivationMap,
-         ultimateWinner: rooms[host].deactivationMap.length === rooms[host].capacity - 1 ? true : false
+         ultimateWinner: Object.values(rooms[host].deactivationMap).length === rooms[host].capacity - 1 ? true : false
       })
    } else if (comparator > 1) {
+      updateDeckLengths(host);
       let warPlayers = getWarPlayers(playersCopy, host, comparator);
       rooms[host].warBounty = rooms[host].warBounty.concat(winnings);
-      rooms[host].warringPlayers = warPlayers;
-      players.forEach(p => {
-         p.changed = false;
-      });
-      updateDeckLengths(host);
-      io.to(rooms[host].name).emit('war', { players: rooms[host].readyPlayers, warPlayers: warPlayers, deckLengths: rooms[host].deckLengths });
-   }
+      if (Object.values(warPlayers).length === 1) {
+         let winner = Object.values(warPlayers)[0].id;
+         rooms[host].warBounty = rooms[host].warBounty.concat(winnings);
+         rooms[host].players[winner].addWinnings(rooms[host].warBounty);
+         rooms[host].warBounty = [];
+         Object.values(rooms[host].readyPlayers).forEach(p => p.changed = true);
+         warHistory = Object.assign({}, rooms[host].readyPlayers);
+         rooms[host].readyPlayers = {};
+         updateDeckLengths(host);
+         let flag = checkForEmpty(host);
+         let l = Object.values(rooms[host].deactivationMap).length;
+         io.to(rooms[host].name).emit('resolved', {
+            players: rooms[host].readyPlayers,
+            roomCap: rooms[host].capacity - l,
+            deckLengths: rooms[host].deckLengths,
+            warHistory: warHistory,
+            winner: winner,
+            deactivationMap: !flag ? false : rooms[host].deactivationMap,
+            ultimateWinner: Object.values(rooms[host].deactivationMap).length === rooms[host].capacity - 1 ? true : false
+         })
+      }
+      else {
+         rooms[host].warringPlayers = warPlayers;
+         let flag = checkForEmpty(host);
+         Object.values(rooms[host].readyPlayers).forEach(p => p.changed = false);
+         updateDeckLengths(host);
+         io.to(rooms[host].name).emit('war', { players: rooms[host].readyPlayers, warPlayers: warPlayers, deckLengths: rooms[host].deckLengths, deactivationMap: !flag ? false : rooms[host].deactivationMap });
+      }
+   
    }
 }
