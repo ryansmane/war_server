@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-   console.log('new user');
+   let currentRoom;
    socket.emit('return-rooms', rooms);
 
    socket.on('create-room', (data) => {
@@ -26,6 +26,7 @@ io.on('connection', (socket) => {
          players: {
             [data.host]: new Player(socket.id, data.desiredName)
          },
+         messages: [],
          initPlayers: {},
          deckLengths: {},
          readyPlayers: {},
@@ -48,7 +49,13 @@ io.on('connection', (socket) => {
       }
    });
 
+   socket.on('send-message', data => {
+      rooms[data.host].messages.push({sender: rooms[data.host].players[data.id].name, message: data.message});
+      io.to(rooms[data.host].name).emit('messages-update', rooms[data.host].messages)
+   })
+
    socket.on('join-room', (data) => {
+      currentRoom = data.host;
       rooms[data.host].players[socket.id] = new Player(socket.id,data.desiredName);
       socket.join(data.name);
       if (
@@ -109,7 +116,10 @@ io.on('connection', (socket) => {
    })
 
    socket.on('disconnect', () => {
-      console.log('disconnected');
+      if (rooms[currentRoom]) {
+         io.to(rooms[currentRoom].name).emit('disconnected', true);
+         currentRoom = null;
+      }
       if (rooms[socket.id]) {
          delete rooms[socket.id];
          io.emit('return-rooms', rooms);
