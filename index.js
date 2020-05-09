@@ -24,7 +24,7 @@ io.on('connection', (socket) => {
          warringPlayers: {},
          warBounty: [],
          players: {
-            [data.host]: new Player(socket.id),
+            [data.host]: new Player(socket.id, data.desiredName)
          },
          initPlayers: {},
          deckLengths: {},
@@ -40,15 +40,16 @@ io.on('connection', (socket) => {
       let players = Object.values(rooms[host].players);
       if (players.filter((p) => p.initialized).length === players.length) {
          players.forEach((p) => {
-            rooms[host].initPlayers[p.id] = { id: p.id, active: true };
+            rooms[host].initPlayers[p.id] = { id: p.id, active: true, name: p.name };
          });
          setDeckLengths(host);
-         io.to(rooms[host].name).emit('return-all-players', { players: Object.values(rooms[host].initPlayers), deckLengths: rooms[host].deckLengths});
+         console.log(rooms[host].players[socket.id].name);
+         io.to(rooms[host].name).emit('return-all-players', { players: rooms[host].initPlayers, deckLengths: rooms[host].deckLengths});
       }
    });
 
    socket.on('join-room', (data) => {
-      rooms[data.host].players[socket.id] = new Player(socket.id);
+      rooms[data.host].players[socket.id] = new Player(socket.id,data.desiredName);
       socket.join(data.name);
       if (
          Object.keys(rooms[data.host].players).length ==

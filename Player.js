@@ -1,10 +1,11 @@
 class Player {
-   constructor(id) {
+   constructor(id, name) {
       this.id = id;
       this.deck = [];
       this.ready = false;
       this.initialized = false;
       this.enabled = true;
+      this.name = name
    }
 
    removeTopCards() {
