@@ -56,7 +56,7 @@ io.on('connection', (socket) => {
 
    socket.on('join-room', (data) => {
       currentRoom = data.host;
-      rooms[data.host].players[socket.id] = new Player(socket.id,data.desiredName);
+      rooms[data.host].players[socket.id] = new Player(socket.id,data.username);
       socket.join(data.name);
       if (
          Object.keys(rooms[data.host].players).length ==
