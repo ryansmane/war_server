@@ -3,16 +3,15 @@ const http = require('http').createServer(app);
 const cors = require('cors');
 const _ = require('lodash');
 const io = require('socket.io')(http);
+const router = require('./router');
 const { Deck } = require('./Deck');
 const { Player } = require('./Player');
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 let rooms = {};
 
 app.use(cors());
-app.get('/', (req, res) => {
-   res.sendFile(__dirname + '/index.html');
-});
+app.use(router);
 
 io.on('connection', (socket) => {
    let currentRoom;
