@@ -1,5 +1,6 @@
 const app = require('express')();
 const http = require('http').createServer(app);
+const cors = require('cors');
 const _ = require('lodash');
 const io = require('socket.io')(http);
 const { Deck } = require('./Deck');
@@ -8,6 +9,7 @@ const port = 3001;
 
 let rooms = {};
 
+app.use(cors());
 app.get('/', (req, res) => {
    res.sendFile(__dirname + '/index.html');
 });
