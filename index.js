@@ -265,13 +265,11 @@ function resolveWar(host, warrers, id) {
    let players = Object.values(rooms[host].readyPlayers);
    let winnings = [];
    let playersCopy = players.slice();
-   console.log('winnings before foreach: ' + winnings)
    players.forEach(p => {
       if (warrers[p.id]) {
          winnings.push(p.card);
       }
    });
-   console.log('winnings after foreach: ' + winnings)
    playersCopy.sort((a, b) => b.card.pip - a.card.pip);
    let comparator = playersCopy.filter((p, i, a) => p.card.pip === a[0].card.pip && warrers[p.id]).length;
    if (comparator === 1) {
